@@ -8,6 +8,7 @@ on:
     paths:
       - '**/app/**'
       - '**/ghost-core/**'
+      - 'Ghost-Source.zip'
       - '.github/workflows/ghost-build.yml'
 
 permissions:
@@ -22,12 +23,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Locate Flutter project
+      - name: Locate Flutter project (unzips Ghost-Source.zip if needed)
         run: |
-          P=$(find . -maxdepth 3 -path '*/app/pubspec.yaml' -not -path '*/node_modules/*' | head -1)
+          find_app() { find . -maxdepth 5 -path '*/app/pubspec.yaml' -not -path '*/node_modules/*' -not -path './.git/*' | head -1; }
+          P=$(find_app)
+          if [ -z "$P" ] && [ -f Ghost-Source.zip ]; then
+            echo "Extracting Ghost-Source.zip ..."
+            unzip -q -o Ghost-Source.zip -d _src
+            P=$(find_app)
+          fi
           if [ -z "$P" ]; then
             echo "ERROR: app/pubspec.yaml not found. Repo layout:"
-            find . -maxdepth 3 -not -path './.git/*' | head -50
+            find . -maxdepth 4 -not -path './.git/*' | head -60
             exit 1
           fi
           APP_DIR=$(dirname "$P")
@@ -96,12 +103,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Locate Ghost Core
+      - name: Locate Ghost Core (unzips Ghost-Source.zip if needed)
         run: |
-          P=$(find . -maxdepth 3 -path '*/ghost-core/package.json' -not -path '*/node_modules/*' | head -1)
+          find_core() { find . -maxdepth 5 -path '*/ghost-core/package.json' -not -path '*/node_modules/*' -not -path './.git/*' | head -1; }
+          P=$(find_core)
+          if [ -z "$P" ] && [ -f Ghost-Source.zip ]; then
+            echo "Extracting Ghost-Source.zip ..."
+            unzip -q -o Ghost-Source.zip -d _src
+            P=$(find_core)
+          fi
           if [ -z "$P" ]; then
             echo "ERROR: ghost-core/package.json not found. Repo layout:"
-            find . -maxdepth 3 -not -path './.git/*' | head -50
+            find . -maxdepth 4 -not -path './.git/*' | head -60
             exit 1
           fi
           CORE_DIR=$(dirname "$P")
