@@ -1,0 +1,175 @@
+name: GHOST Ultimate Hybrid - Android and AI Agent Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/app/**'
+      - '**/ghost-core/**'
+      - '.github/workflows/ghost-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Build GHOST Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate Flutter project
+        run: |
+          P=$(find . -maxdepth 3 -path '*/app/pubspec.yaml' -not -path '*/node_modules/*' | head -1)
+          if [ -z "$P" ]; then
+            echo "ERROR: app/pubspec.yaml not found. Repo layout:"
+            find . -maxdepth 3 -not -path './.git/*' | head -50
+            exit 1
+          fi
+          APP_DIR=$(dirname "$P")
+          echo "Flutter project: $APP_DIR"
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Check Flutter version
+        run: flutter --version
+
+      - name: Install Flutter dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter pub get
+
+      - name: Analyze Flutter code
+        working-directory: ${{ env.APP_DIR }}
+        continue-on-error: true
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run Flutter tests
+        working-directory: ${{ env.APP_DIR }}
+        continue-on-error: true
+        run: flutter test
+
+      - name: Build Android Release APK
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter build apk --release
+
+      - name: Build Android Debug APK
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter build apk --debug
+
+      - name: Package Android APK files
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/GHOST-Ultimate-Release.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk dist/GHOST-Ultimate-Debug.apk
+          cd dist
+          zip GHOST-Android-APKs.zip GHOST-Ultimate-Release.apk GHOST-Ultimate-Debug.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GHOST-Android-APK
+          path: ${{ env.APP_DIR }}/dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  agent:
+    name: Build GHOST AI Agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate Ghost Core
+        run: |
+          P=$(find . -maxdepth 3 -path '*/ghost-core/package.json' -not -path '*/node_modules/*' | head -1)
+          if [ -z "$P" ]; then
+            echo "ERROR: ghost-core/package.json not found. Repo layout:"
+            find . -maxdepth 3 -not -path './.git/*' | head -50
+            exit 1
+          fi
+          CORE_DIR=$(dirname "$P")
+          echo "Ghost Core: $CORE_DIR"
+          echo "CORE_DIR=$CORE_DIR" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check Ghost Core files
+        run: |
+          test -f "$CORE_DIR/package.json"
+          test -f "$CORE_DIR/src/server.js"
+          test -f "$CORE_DIR/Dockerfile"
+
+      - name: Install Agent dependencies
+        working-directory: ${{ env.CORE_DIR }}
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Test Ghost Core
+        working-directory: ${{ env.CORE_DIR }}
+        run: npm test
+
+      - name: Check JavaScript syntax
+        working-directory: ${{ env.CORE_DIR }}
+        run: |
+          for file in src/*.js test/*.js; do
+            node --check "$file"
+          done
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Ghost Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.CORE_DIR }}
+          file: ${{ env.CORE_DIR }}/Dockerfile
+          tags: ghost-core:latest
+          outputs: type=docker,dest=/tmp/ghost-core.tar
+
+      - name: Package Ghost Agent source
+        run: |
+          zip -qr GHOST-Agent-Source.zip "$CORE_DIR" \
+            -x "*/node_modules/*" "*/.env"
+
+      - name: Upload Ghost Agent
+        uses: actions/upload-artifact@v4
+        with:
+          name: GHOST-AI-Agent
+          path: |
+            /tmp/ghost-core.tar
+            GHOST-Agent-Source.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  report:
+    name: GHOST Build Complete
+    needs:
+      - android
+      - agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build success message
+        run: |
+          echo "GHOST ULTIMATE HYBRID"
+          echo "ANDROID APK: SUCCESS"
+          echo "GHOST AI AGENT: SUCCESS"
+          echo "DOCKER IMAGE: SUCCESS"
