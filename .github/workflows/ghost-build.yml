@@ -43,28 +43,23 @@ jobs:
 
       - name: Fix Gradle Version
         run: |
-          # Find the gradle-wrapper.properties file inside the extracted project
           WRAPPER_FILE=$(find . -path '*/android/gradle/wrapper/gradle-wrapper.properties' -not -path '*/node_modules/*' | head -1)
           if [ -n "$WRAPPER_FILE" ]; then
             echo "Updating Gradle wrapper at: $WRAPPER_FILE"
-            # Update the distributionUrl to Gradle 9.3.1
             sed -i 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-all.zip|' "$WRAPPER_FILE"
-          else
-            echo "WARNING: gradle-wrapper.properties not found. Skipping update."
           fi
 
       - name: Fix Android Gradle Plugin Version
         run: |
-          # Find build.gradle or build.gradle.kts in the android folder
-          GRADLE_FILE=$(find . -path '*/android/build.gradle*' -not -path '*/node_modules/*' | head -1)
-          if [ -n "$GRADLE_FILE" ]; then
-            echo "Updating AGP version in: $GRADLE_FILE"
-            # Replace version 9.0.1 with 9.1.1
-            sed -i 's/com.android.tools.build:gradle:9.0.1/com.android.tools.build:gradle:9.1.1/g' "$GRADLE_FILE"
-            # If using the plugins DSL (e.g., in settings.gradle or build.gradle.kts)
-            sed -i 's/id("com.android.application") version "9.0.1"/id("com.android.application") version "9.1.1"/g' "$GRADLE_FILE"
+          # Find the settings.gradle or settings.gradle.kts file
+          SETTINGS_FILE=$(find . -path '*/android/settings.gradle*' -not -path '*/node_modules/*' | head -1)
+          if [ -n "$SETTINGS_FILE" ]; then
+            echo "Updating AGP version in: $SETTINGS_FILE"
+            # Update the com.android.application plugin version to 9.1.1
+            sed -i 's/com.android.application" version "[0-9.]*"/com.android.application" version "9.1.1"/g' "$SETTINGS_FILE"
+            sed -i "s/com.android.application' version '[0-9.]*'/com.android.application' version '9.1.1'/g" "$SETTINGS_FILE"
           else
-            echo "WARNING: build.gradle not found. Skipping AGP update."
+            echo "WARNING: settings.gradle not found. Skipping AGP update."
           fi
 
       - name: Set up Java 17
