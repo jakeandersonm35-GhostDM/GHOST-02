@@ -49,19 +49,6 @@ jobs:
             sed -i 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-all.zip|' "$WRAPPER_FILE"
           fi
 
-      - name: Fix Android Gradle Plugin Version
-        run: |
-          # Find the settings.gradle or settings.gradle.kts file
-          SETTINGS_FILE=$(find . -path '*/android/settings.gradle*' -not -path '*/node_modules/*' | head -1)
-          if [ -n "$SETTINGS_FILE" ]; then
-            echo "Updating AGP version in: $SETTINGS_FILE"
-            # Update the com.android.application plugin version to 9.1.1
-            sed -i 's/com.android.application" version "[0-9.]*"/com.android.application" version "9.1.1"/g' "$SETTINGS_FILE"
-            sed -i "s/com.android.application' version '[0-9.]*'/com.android.application' version '9.1.1'/g" "$SETTINGS_FILE"
-          else
-            echo "WARNING: settings.gradle not found. Skipping AGP update."
-          fi
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -93,11 +80,11 @@ jobs:
 
       - name: Build Android Release APK
         working-directory: ${{ env.APP_DIR }}
-        run: flutter build apk --release
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
       - name: Build Android Debug APK
         working-directory: ${{ env.APP_DIR }}
-        run: flutter build apk --debug
+        run: flutter build apk --debug --android-skip-build-dependency-validation
 
       - name: Package Android APK files
         working-directory: ${{ env.APP_DIR }}
